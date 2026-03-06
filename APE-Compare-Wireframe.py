@@ -19,7 +19,7 @@ source_plan = {
     "FeatureProduct": {
         "FeatureCode": "CDSC",
         "Name": "Surrender Charge Rider",
-        "Description": "Declining charge over 7 years",
+        "Description": "Partial withdrawals allowed after year 1",
     },
 }
 
@@ -27,12 +27,12 @@ target_plan = {
     "PlanCode": "XYZ456",
     "PolicyProduct": {
         "CarrierCode": "XYZ",
-        "CarrierName": "XYZ Insurance",
+        "CarrierName": "ABC Life",
         "PlanName": "Growth Plan",
     },
     "AnnuityProduct": {
         "ProductType": "Indexed",
-        "IssueAge": "21-80",
+        "IssueAge": "18-75",
     },
     "FeatureProduct": {
         # FeatureCode intentionally missing to demonstrate N/A handling
@@ -54,7 +54,7 @@ with info_col2:
 
 st.markdown("---")
 
-# Minimal wireframe styling
+# ⬇ REPLACE YOUR EXISTING STYLE BLOCK WITH THIS
 st.markdown(
     """
     <style>
@@ -64,8 +64,15 @@ st.markdown(
         padding: 6px 8px;
         margin-bottom: 6px;
       }
+      .cmp-match {
+        background-color: #e6f4ea !important;
+        border-color: #a8d5b5 !important;
+        color: #1e7e34 !important;
+      }
       .cmp-diff {
-        background-color: #fff4e5;
+        background-color: #fde8e8 !important;
+        border-color: #f5b7b7 !important;
+        color: #c0392b !important;
       }
       .cmp-header {
         font-weight: 700;
@@ -89,11 +96,11 @@ st.markdown(
 # 3-column layout header
 h1, h2, h3 = st.columns([1.2, 1.6, 1.2])
 with h1:
-    st.markdown('<div class="cmp-header">Source Value</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmp-header">Source Plan</div>', unsafe_allow_html=True)
 with h2:
     st.markdown('<div class="cmp-header">Object / Property</div>', unsafe_allow_html=True)
 with h3:
-    st.markdown('<div class="cmp-header">Target Value</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cmp-header">Target Plan</div>', unsafe_allow_html=True)
 
 # Object order for display
 preferred_order = ["PolicyProduct", "AnnuityProduct", "FeatureProduct"]
@@ -131,9 +138,23 @@ ordered_objects = [o for o in preferred_order if o in all_objects] + sorted(
 if "open_object" not in st.session_state:
     st.session_state.open_object = None  # start collapsed
 
-# Collapse all action
-if st.button("Collapse all"):
-    st.session_state.open_object = None
+# Session state for one-open-at-a-time tree
+if "open_object" not in st.session_state:
+    st.session_state.open_object = None  # start collapsed
+
+if "expand_all" not in st.session_state:
+    st.session_state.expand_all = False
+
+# Collapse All / Expand All buttons side by side
+btn_col1, btn_col2, _ = st.columns([1, 1, 6])
+with btn_col1:
+    if st.button("▶ Expand All"):
+        st.session_state.expand_all = True
+        st.session_state.open_object = None
+with btn_col2:
+    if st.button("▼ Collapse All"):
+        st.session_state.expand_all = False
+        st.session_state.open_object = None
 
 def safe_value(v):
     return "N/A" if v is None else str(v)
@@ -143,26 +164,27 @@ for obj_name in ordered_objects:
     src_obj = source_plan.get(obj_name, {})
     tgt_obj = target_plan.get(obj_name, {})
 
-    is_open = st.session_state.open_object == obj_name
+    # Open if expand all is on OR if this object is individually selected
+    is_open = st.session_state.expand_all or st.session_state.open_object == obj_name
     obj_label = f"▼ {obj_name}" if is_open else f"▶ {obj_name}"
 
     # Object row with clickable button in middle column
     c1, c2, c3 = st.columns([1.2, 1.6, 1.2])
     with c1:
         st.markdown('<div class="cmp-row"> </div>', unsafe_allow_html=True)
-
     with c2:
         if st.button(obj_label, key=f"obj_btn_{obj_name}", use_container_width=True):
+            # Clicking an object turns off expand all and toggles that object
+            st.session_state.expand_all = False
             if st.session_state.open_object == obj_name:
                 st.session_state.open_object = None
             else:
                 st.session_state.open_object = obj_name
-
     with c3:
         st.markdown('<div class="cmp-row"> </div>', unsafe_allow_html=True)
 
-    # Re-check open state after click update
-    is_open = st.session_state.open_object == obj_name
+    # Re-check open state after click
+    is_open = st.session_state.expand_all or st.session_state.open_object == obj_name
     if not is_open:
         continue
 
@@ -173,11 +195,12 @@ for obj_name in ordered_objects:
         tgt_val = safe_value(tgt_obj.get(prop))
 
         is_diff = src_val != tgt_val
-        row_class = "cmp-row cmp-diff" if is_diff else "cmp-row"
 
-        left_text = f"⚠ {src_val}" if is_diff else src_val
-        mid_text = f"└─ {prop}"
-        right_text = f"⚠ {tgt_val}" if is_diff else tgt_val
+        # Green for match, Red for mismatch
+        row_class  = "cmp-row cmp-diff" if is_diff else "cmp-row cmp-match"
+        left_text  = src_val
+        mid_text   = f"└─ {prop}"
+        right_text = tgt_val
 
         c1, c2, c3 = st.columns([1.2, 1.6, 1.2])
         with c1:
